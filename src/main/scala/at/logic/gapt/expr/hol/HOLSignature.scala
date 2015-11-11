@@ -9,27 +9,37 @@ import at.logic.gapt.proofs.Sequent
  * Created by sebastian on 11/10/15.
  */
 object HOLSignature {
+  /**
+   * Type alias for Set[Const].
+   */
   type HOLSignature = Set[Const]
 
+  /**
+   *
+   * @return The empty HOLSignature.
+   */
   def apply(): HOLSignature = Set.empty[Const]
+
+  /**
+   * Computes the signature of an expression.
+   *
+   * @param expr A LambdaExpression.
+   * @return The set of constants occurring in expr.
+   */
   def apply( expr: LambdaExpression ): HOLSignature = expr match {
-    case Var( _, _ ) => Set()
-    case c @ Const( name, _ ) =>
-      name match {
-        case "∀" | "∃" | "¬" | "∨" | "∧" | "⊃" | "⊥" | "⊤" => Set()
-        case _ => Set( c )
-      }
-    case App( fun, arg ) =>
-      val newSignature = HOLSignature( fun ) ++ HOLSignature( arg )
-
-      for ( ( name, symbols ) <- newSignature.groupBy( _.name ) ) if ( name != "=" )
-        require( symbols.size == 1, s"Incompatible signatures of $fun and $arg: Constant symbol $name is not unique." )
-
-      newSignature
-
-    case Abs( x, arg ) => HOLSignature( arg )
+    case Var( _, _ )        => Set()
+    case _: LogicalConstant => Set()
+    case c: Const           => Set( c )
+    case App( fun, arg )    => HOLSignature( fun ) ++ HOLSignature( arg )
+    case Abs( x, arg )      => HOLSignature( arg )
   }
 
+  /**
+   * Computes the signature of a sequent.
+   *
+   * @param sequent A Sequent of LambdaExpressions.
+   * @return The set of constants occurring in sequent.
+   */
   def apply( sequent: Sequent[LambdaExpression] ): HOLSignature =
     if ( sequent.isEmpty )
       HOLSignature()

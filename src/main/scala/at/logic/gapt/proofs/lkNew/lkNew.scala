@@ -56,6 +56,10 @@ abstract class LKProof extends SequentProof[HOLFormula, LKProof] {
     }
   }
 
+  /**
+   * The minimal context in which this proof can be formulated.
+   *
+   */
   val proofContext: ProofContext
 }
 
