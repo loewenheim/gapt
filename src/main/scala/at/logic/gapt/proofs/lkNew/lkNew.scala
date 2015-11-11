@@ -2,7 +2,7 @@ package at.logic.gapt.proofs.lkNew
 
 import at.logic.gapt.expr._
 import at.logic.gapt.expr.fol.{ FOLPosition, FOLSubstitution, FOLMatchingAlgorithm }
-import at.logic.gapt.expr.hol.HOLPosition
+import at.logic.gapt.expr.hol.{ HOLSignature, HOLPosition }
 import at.logic.gapt.proofs._
 
 import scala.collection.mutable
@@ -55,6 +55,8 @@ abstract class LKProof extends SequentProof[HOLFormula, LKProof] {
       case Ant( _ ) => throw LKRuleCreationException( s"Index $i should be in the succedent." )
     }
   }
+
+  val proofContext: ProofContext
 }
 
 /**
@@ -201,7 +203,10 @@ object InitialSequent {
   def unapply( proof: InitialSequent ) = Some( proof.endSequent )
 }
 
-case class TheoryAxiom( conclusion: Sequent[HOLAtom] ) extends InitialSequent
+case class TheoryAxiom( conclusion: Sequent[HOLAtom] ) extends InitialSequent {
+  val sig = HOLSignature( conclusion )
+  override val proofContext = ProofContext( sig, Map(), Set( conclusion ) )
+}
 
 /**
  * An LKProof introducing ⊤ on the right:
@@ -213,6 +218,7 @@ case class TheoryAxiom( conclusion: Sequent[HOLAtom] ) extends InitialSequent
 case object TopAxiom extends InitialSequent {
   override def name: String = "⊤:r"
   override def conclusion = HOLSequent( Nil, Seq( Top() ) )
+  override val proofContext = ProofContext()
   def mainFormula = Top()
 }
 
@@ -226,6 +232,7 @@ case object TopAxiom extends InitialSequent {
 case object BottomAxiom extends InitialSequent {
   override def name: String = "⊥:l"
   override def conclusion = HOLSequent( Seq( Bottom() ), Nil )
+  override val proofContext = ProofContext()
   def mainFormula = Bottom()
 }
 
@@ -241,6 +248,7 @@ case object BottomAxiom extends InitialSequent {
  */
 case class LogicalAxiom( A: HOLAtom ) extends InitialSequent {
   override def conclusion = HOLSequent( Seq( A ), Seq( A ) )
+  override val proofContext = ProofContext( HOLSignature( A ), Map(), Set() )
   def mainFormula = A
 }
 
@@ -256,6 +264,7 @@ case class LogicalAxiom( A: HOLAtom ) extends InitialSequent {
  */
 case class ReflexivityAxiom( s: LambdaExpression ) extends InitialSequent {
   override def conclusion = HOLSequent( Seq(), Seq( Eq( s, s ) ) )
+  override val proofContext = ProofContext( HOLSignature( conclusion ), Map(), Set() )
   def mainFormula = Eq( s, s )
 }
 
@@ -318,6 +327,8 @@ case class ContractionLeftRule( subProof: LKProof, aux1: SequentIndex, aux2: Seq
 
   override def mainFormulaSequent = mainFormula +: Sequent()
 
+  override val proofContext = subProof.proofContext
+
 }
 
 object ContractionLeftRule extends ConvenienceConstructor( "ContractionLeftRule" ) {
@@ -366,6 +377,8 @@ case class ContractionRightRule( subProof: LKProof, aux1: SequentIndex, aux2: Se
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
 
+  override val proofContext = subProof.proofContext
+
 }
 
 object ContractionRightRule extends ConvenienceConstructor( "ContractionRightRule" ) {
@@ -403,6 +416,8 @@ case class WeakeningLeftRule( subProof: LKProof, formula: HOLFormula )
   def mainFormula = formula
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext.copy( signature = subProof.proofContext.signature ++ HOLSignature( formula ) )
 }
 
 /**
@@ -423,6 +438,8 @@ case class WeakeningRightRule( subProof: LKProof, formula: HOLFormula )
   def mainFormula = formula
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext.copy( signature = subProof.proofContext.signature ++ HOLSignature( formula ) )
 }
 
 /**
@@ -454,6 +471,8 @@ case class CutRule( leftSubProof: LKProof, aux1: SequentIndex, rightSubProof: LK
   def auxIndices = Seq( Seq( aux1 ), Seq( aux2 ) )
 
   override def mainFormulaSequent = Sequent()
+
+  override val proofContext = leftSubProof.proofContext ++ rightSubProof.proofContext
 }
 
 object CutRule extends ConvenienceConstructor( "CutRule" ) {
@@ -521,6 +540,8 @@ case class NegLeftRule( subProof: LKProof, aux: SequentIndex )
   override def name = "¬:l"
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext
 }
 
 object NegLeftRule extends ConvenienceConstructor( "NegLeftRule" ) {
@@ -562,6 +583,8 @@ case class NegRightRule( subProof: LKProof, aux: SequentIndex )
   override def name = "¬:r"
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object NegRightRule extends ConvenienceConstructor( "NegRightRule" ) {
@@ -607,6 +630,8 @@ case class AndLeftRule( subProof: LKProof, aux1: SequentIndex, aux2: SequentInde
   override def name = "∧:l"
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext
 }
 
 object AndLeftRule extends ConvenienceConstructor( "AndLeftRule" ) {
@@ -672,6 +697,8 @@ case class AndRightRule( leftSubProof: LKProof, aux1: SequentIndex, rightSubProo
   override def name = "∧:r"
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = leftSubProof.proofContext ++ rightSubProof.proofContext
 }
 
 object AndRightRule extends ConvenienceConstructor( "AndRightRule" ) {
@@ -740,6 +767,8 @@ case class OrLeftRule( leftSubProof: LKProof, aux1: SequentIndex, rightSubProof:
   override def name = "∨:l"
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = leftSubProof.proofContext ++ rightSubProof.proofContext
 }
 
 object OrLeftRule extends ConvenienceConstructor( "OrLeftRule" ) {
@@ -805,6 +834,8 @@ case class OrRightRule( subProof: LKProof, aux1: SequentIndex, aux2: SequentInde
   override def name = "∨:r"
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object OrRightRule extends ConvenienceConstructor( "OrRightRule" ) {
@@ -869,6 +900,8 @@ case class ImpLeftRule( leftSubProof: LKProof, aux1: SequentIndex, rightSubProof
   override def name = "\u2283:l"
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = leftSubProof.proofContext ++ rightSubProof.proofContext
 }
 
 object ImpLeftRule extends ConvenienceConstructor( "ImpLeftRule" ) {
@@ -934,6 +967,8 @@ case class ImpRightRule( subProof: LKProof, aux1: SequentIndex, aux2: SequentInd
   override def name = "\u2283:r"
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object ImpRightRule extends ConvenienceConstructor( "ImpRightRule" ) {
@@ -998,6 +1033,8 @@ case class ForallLeftRule( subProof: LKProof, aux: SequentIndex, A: HOLFormula, 
   def auxIndices = Seq( Seq( aux ) )
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext
 }
 
 object ForallLeftRule extends ConvenienceConstructor( "ForallLeftRule" ) {
@@ -1078,6 +1115,8 @@ case class ForallRightRule( subProof: LKProof, aux: SequentIndex, eigenVariable:
   def auxIndices = Seq( Seq( aux ) )
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object ForallRightRule extends ConvenienceConstructor( "ForallRightRule" ) {
@@ -1155,6 +1194,8 @@ case class ExistsLeftRule( subProof: LKProof, aux: SequentIndex, eigenVariable: 
   def auxIndices = Seq( Seq( aux ) )
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext
 }
 
 object ExistsLeftRule extends ConvenienceConstructor( "ExistsLeftRule" ) {
@@ -1222,6 +1263,8 @@ case class ExistsRightRule( subProof: LKProof, aux: SequentIndex, A: HOLFormula,
   def auxIndices = Seq( Seq( aux ) )
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object ExistsRightRule extends ConvenienceConstructor( "ExistsRightRule" ) {
@@ -1351,6 +1394,8 @@ case class EqualityLeftRule( subProof: LKProof, eq: SequentIndex, aux: SequentIn
   override def name = "eq:l"
 
   override def mainFormulaSequent = mainFormula +: Sequent()
+
+  override val proofContext = subProof.proofContext
 }
 
 object EqualityLeftRule extends ConvenienceConstructor( "EqualityLeftRule" ) {
@@ -1492,6 +1537,8 @@ case class EqualityRightRule( subProof: LKProof, eq: SequentIndex, aux: SequentI
   override def name = "eq:r"
 
   override def mainFormulaSequent = Sequent() :+ mainFormula
+
+  override val proofContext = subProof.proofContext
 }
 
 object EqualityRightRule extends ConvenienceConstructor( "EqualityRightRule" ) {
@@ -1677,6 +1724,12 @@ case class InductionRule( cases: Seq[InductionCase], mainFormula: HOLFormula ) e
   override def productElement( n: Int ) = product( n )
 
   override def name = "ind"
+
+  override val proofContext =
+    if ( cases.isEmpty )
+      ProofContext( HOLSignature( mainFormula ), Map(), Set() )
+    else
+      immediateSubProofs map { _.proofContext } reduceLeft ( _ ++ _ )
 }
 
 /**
@@ -1700,6 +1753,8 @@ case class DefinitionLeftRule( subProof: LKProof, aux: SequentIndex, main: HOLFo
   override def name = "d:l"
   override def auxIndices = Seq( Seq( aux ) )
   override def mainFormulaSequent = main +: Sequent()
+
+  override val proofContext = subProof.proofContext.addDefinition( main, premise( aux ) )
 }
 
 object DefinitionLeftRule extends ConvenienceConstructor( "DefinitionLeftRule" ) {
@@ -1741,6 +1796,8 @@ case class DefinitionRightRule( subProof: LKProof, aux: SequentIndex, main: HOLF
   override def name = "d:r"
   override def auxIndices = Seq( Seq( aux ) )
   override def mainFormulaSequent = Sequent() :+ main
+
+  override val proofContext = subProof.proofContext.addDefinition( main, premise( aux ) )
 }
 
 object DefinitionRightRule extends ConvenienceConstructor( "DefinitionRightRule" ) {
